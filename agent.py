@@ -1,0 +1,108 @@
+from openai import OpenAI
+import json
+from dotenv import load_dotenv
+from tools import get_weather, get_calendar
+
+load_dotenv()
+
+client = OpenAI()
+
+# List of tools for model to use
+tools = [
+    {
+        "type": "function",
+        "name": "get_weather",
+        "description": "Get the current weather conditions such as sky conditions, temperature, and wind speed for a given city.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "description": "The city we want to check the weather for."
+                },
+            },
+            "required": ["city"],
+        },
+    },
+
+    {
+        "type": "function",
+        "name": "get_calendar",
+        "description": "Get the first 20 events from the user's Google Calendar for the current week and will return the event name, date, and start time, if it has a start time, in a list.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "window": {
+                    "type": "string",
+                    "description": """
+                    The time window for which to retrieve calendar events, formatted as an ISO 8601 timestamp. For example, '2026-01-31T23:59:59Z' to 
+                    get events up to January 31, 2026. If the user does not provide a window, do not pass this parameter. If the user for example wants
+                    events for the week, calculate the end of the week from the current date and provide the timestamp in ISO 8601 format. 
+                    """,
+                }
+
+            },
+            "additionalProperties": False
+        },
+    },
+]
+
+# input list we will add to and provide to the model
+input_list = [
+    {"role": "system", "content": "You are an assistant. If the user asks about the weather or calendar, call the corresponding tool using the exact tool name."},
+    {"role": "user", "content": input("What can I do for you? ")}
+]
+
+response = client.responses.create(
+    model="gpt-5-nano",
+    tools=tools,
+    input=input_list,
+)
+
+# Save response for input feedback
+input_list += response.output
+
+# Check the response for tool calls
+for item in response.output:
+    if item.type == "function_call":
+        if item.name == "get_weather":
+            # execute tool to get the weather
+            #print(f"Argument for tool {item.arguments[9:-2]}")
+            weather_type, temp, wind, name = get_weather(item.arguments[9:-2])
+
+            # add tool response to input list
+            input_list.append({
+                "type": "function_call_output",
+                "call_id": item.call_id,
+                "output": json.dumps({
+                    "weather_type": weather_type,
+                    "temperature": temp,
+                    "wind_speed": wind,
+                    "city": name,
+                })
+            })
+        elif item.name == "get_calendar":
+            # execute the tool and get the calendar events
+            print(f"Argument for tool {item.arguments[11:-2]}")
+            calendar_events = get_calendar()
+
+            # add tool response to input list
+            input_list.append({
+                "type": "function_call_output",
+                "call_id": item.call_id,
+                "output": json.dumps({
+                    "events": calendar_events
+                })
+            })
+
+print("Final input to model:", input_list)
+
+response = client.responses.create(
+    model="gpt-5-nano",
+    instructions="You are an assistant and must summarize the information given by the tools.",
+    tools=tools,
+    input=input_list,
+)
+
+# Print model output
+print(f"\n\n{response.output_text}")
