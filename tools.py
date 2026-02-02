@@ -62,7 +62,7 @@ def get_calendar(window=None):
 
         # Call the Calendar API
         now = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
-        print("Getting the upcoming 20 events")
+        # print("Getting the upcoming 20 events")
         events_result = (
             service.events()
             .list(
@@ -93,7 +93,7 @@ def get_calendar(window=None):
         print(f"An error occurred: {error}")
 
 
-def get_canvas_assignments():
+def get_canvas_assignments(window=None):
 
     load_dotenv()
 
@@ -110,28 +110,43 @@ def get_canvas_assignments():
     }
     response = requests.get(url, headers=HEADERS, params=params)
     courses = response.json()
-    
-    epoch = 0
+
+    output = []
+
+    # getting the assignments for spring 2026
     for course in courses:
         term = course.get("term")
         if not term:
             continue
 
         if term.get("name") == "Spring 2026":
-            epoch += 1
-            print(course.get("name"))
+            # print(course.get("name"))
             course_id = course.get("id")
             assignment_url = f"{CANVAS_URL}api/v1/users/self/courses/{course_id}/assignments"
             params = {"per_page": 100}
             response = requests.get(assignment_url, headers=HEADERS, params=params)
             assignments = response.json()
-            for assignment in assignments:
-                if assignment["has_submitted_submissions"] == True:
-                    print(assignment["name"])
+            
+            if window is None:
+                window = str(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7))
 
-            if epoch >= 2:
-                return
+            assignments_due = []
+            for assignment in assignments:
+                if assignment["has_submitted_submissions"] != True:
+                    if assignment["due_at"] < window:
+                        # print(assignment.get("name"))
+                        # add assignments for given course to an array with due date
+                        assignments_due.append([assignment.get("name"), assignment.get("due_at")])
+            
+            # append to output a dictionary of the assignmetns due for each course
+            output.append({
+                "course": course.get("name"),
+                "assignments_due": assignments_due
+            })
+
+    return output
+                        
 
 
 # print(get_calendar())
-get_canvas_assignments()
+# print(get_canvas_assignments())

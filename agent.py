@@ -1,7 +1,7 @@
 from openai import OpenAI
 import json
 from dotenv import load_dotenv
-from tools import get_weather, get_calendar
+from tools import get_weather, get_calendar, get_canvas_assignments
 
 load_dotenv()
 
@@ -9,6 +9,7 @@ client = OpenAI()
 
 # List of tools for model to use
 tools = [
+    # Tool to get weather information
     {
         "type": "function",
         "name": "get_weather",
@@ -25,6 +26,7 @@ tools = [
         },
     },
 
+    # Tool to get calendar events
     {
         "type": "function",
         "name": "get_calendar",
@@ -45,14 +47,41 @@ tools = [
             "additionalProperties": False
         },
     },
+
+    # Tool to get school assignments from Canvas
+    {
+        "type": "function",
+        "name": "get_canvas_assignments",
+        "description": """
+        Get a list of courses and the assignments that are due within the given time window from the user's Canvas account. The assignments will only
+        be included if they are not yet submitted. The function returns a list of dictionaries, each has the course name and the given assignments
+        due within the window.
+        """,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "window": {
+                    "type": "string",
+                    "description": """
+                    The window parameter a datetime formatted timestamp representing the end of the time window. For example, if today is
+                    January 31, 2026 and the user wants assignemnts due in the next two weeks, the window parameter would be '2026-02-14 23:59:59.441012+00:00'.
+                    If no window is provided, it will be default get assignments due within the next 7 days. If the user does not specify a window, do not pass one.
+                    """
+                },
+            },
+            "additionalProperties": False
+        },
+    },
 ]
 
 # input list we will add to and provide to the model
 input_list = [
-    {"role": "system", "content": "You are an assistant. If the user asks about the weather or calendar, call the corresponding tool using the exact tool name."},
+    {"role": "system", "content": "You are an assistant. If the user asks for data that a tool can provide, call the corresponding tool using the exact tool name."},
     {"role": "user", "content": input("What can I do for you? ")}
 ]
 
+
+# Agentic Loop
 response = client.responses.create(
     model="gpt-5-nano",
     tools=tools,
@@ -68,7 +97,7 @@ for item in response.output:
         if item.name == "get_weather":
             # execute tool to get the weather
             #print(f"Argument for tool {item.arguments[9:-2]}")
-            weather_type, temp, wind, name = get_weather(item.arguments[9:-2])
+            weather_type, temp, wind, name = get_weather(json.loads(item.arguments)["city"])
 
             # add tool response to input list
             input_list.append({
@@ -83,8 +112,8 @@ for item in response.output:
             })
         elif item.name == "get_calendar":
             # execute the tool and get the calendar events
-            print(f"Argument for tool {item.arguments[11:-2]}")
-            calendar_events = get_calendar()
+            # print(f"Argument for tool {item.arguments[11:-2]}")
+            calendar_events = get_calendar(json.loads(item.arguments)["window"])
 
             # add tool response to input list
             input_list.append({
@@ -92,6 +121,19 @@ for item in response.output:
                 "call_id": item.call_id,
                 "output": json.dumps({
                     "events": calendar_events
+                })
+            })
+        elif item.name == "get_canvas_assignments":
+            # execute the tool and get the calendar events
+            # print(f"Argument for tool {json.loads(item.arguments)['window']}")
+            calendar_events = get_canvas_assignments(json.loads(item.arguments)["window"])
+
+            # add tool response to input list
+            input_list.append({
+                "type": "function_call_output",
+                "call_id": item.call_id,
+                "output": json.dumps({
+                    "assignments": calendar_events
                 })
             })
 
