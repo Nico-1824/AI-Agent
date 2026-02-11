@@ -74,10 +74,16 @@ tools = [
     },
 ]
 
+
+
+###############################################################
+#/////// FUNCTION TO CALL THE AGENT FOR A RESPONSE \\\\\\\\\\\\
+###############################################################
+
 def prompt_agent(input):
     # input list we will add to and provide to the model
     input_list = [
-        {"role": "system", "content": "You are an assistant. If the user asks for data that a tool can provide, call the corresponding tool using the exact tool name."},
+        {"role": "system", "content": "You are an assistant called Theios. If the user asks for data that a tool can provide, call the corresponding tool using the exact tool name."},
         {"role": "user", "content": input},
     ]
 
@@ -114,7 +120,6 @@ def prompt_agent(input):
                 })
             elif item.name == "get_calendar":
                 # execute the tool and get the calendar events
-                # print(f"Argument for tool {item.arguments[11:-2]}")
                 print("Getting calendar info...")
                 calendar_events = get_calendar(json.loads(item.arguments)["window"])
 
@@ -128,15 +133,15 @@ def prompt_agent(input):
                 })
             elif item.name == "get_canvas_assignments":
                 # execute the tool and get the calendar events
-                # print(f"Argument for tool {json.loads(item.arguments)['window']}")
-                calendar_events = get_canvas_assignments(json.loads(item.arguments)["window"])
+                print("Getting canvas assignments...")
+                canvas_events = get_canvas_assignments(json.loads(item.arguments)["window"])
 
                 # add tool response to input list
                 input_list.append({
                     "type": "function_call_output",
                     "call_id": item.call_id,
                     "output": json.dumps({
-                        "assignments": calendar_events
+                        "assignments": canvas_events
                     })
                 })
 
@@ -144,10 +149,14 @@ def prompt_agent(input):
 
     response = client.responses.create(
         model="gpt-5-nano",
-        instructions="You are an assistant and must summarize the information given by the tools.",
+        instructions="""
+        You are an assistant called Theios and must summarize the information given by the tools and make it short and concise, do not ask if the user needs 
+        anything more, just provide the information. You will return a response that will be displayed in a textbox and must be clean and easy to read.
+        """,
         tools=tools,
         input=input_list,
     )
 
     # Print model output
     print(f"\n\n{response.output_text}")
+    return response.output_text

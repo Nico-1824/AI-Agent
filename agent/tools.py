@@ -3,8 +3,7 @@ from dotenv import load_dotenv
 import os
 import datetime
 import os.path
-from bs4 import BeautifulSoup
-import json
+from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -12,13 +11,23 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+load_dotenv()
+
+
+
+
+
+
+##########################################################################################
+############################## GET WEATHER ###############################################
+##########################################################################################
+
 
 def get_weather(city):
     # use google api to get weather
     # get the long and lat of a city
     # send a get request to openweathermap api
     # returns the weather conditions, temperature, wind speed, and city
-    load_dotenv()
     api_key = os.getenv("OPENWEATHER_API")
     #print(f"City we are checking {city}")
     
@@ -31,27 +40,43 @@ def get_weather(city):
     weather_type, temp, wind, name = weather_data["weather"][0]["main"], weather_data["main"]["temp"], weather_data["wind"]["speed"], weather_data["name"]
     return weather_type, temp, wind, name
 
+
+
+
+
+
+
+##########################################################################################
+############################## GET CALENDAR ##############################################
+##########################################################################################
+
+
 def get_calendar(window=None):
     # If modifying these scopes, delete the file token.json.
     SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+    BASE_DIR = Path(__file__).resolve().parents[0]
+
+    CREDS_FILE = BASE_DIR / "credentials.json"
+    TOKEN_FILE = BASE_DIR / "token.json"
 
     creds = None
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    if TOKEN_FILE.exists():
+        creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json", SCOPES
-            )
+            if not CREDS_FILE.exists():
+                raise FileNotFoundError(f"Google client secrets not found at {CREDS_FILE}")
+            flow = InstalledAppFlow.from_client_secrets_file(str(CREDS_FILE), SCOPES)
+            # NOTE: run_local_server will open a browser — ok for local dev
             creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open("token.json", "w") as token:
+            with open(TOKEN_FILE, "w") as token:
                 token.write(creds.to_json())
 
     try:
@@ -90,9 +115,20 @@ def get_calendar(window=None):
         print(f"An error occurred: {error}")
 
 
-def get_canvas_assignments(window=None):
 
-    load_dotenv()
+
+
+
+
+
+
+
+
+##########################################################################################
+############################## GET CANVAS ASSIGNEMNTS ####################################
+##########################################################################################
+
+def get_canvas_assignments(window=None):
 
     CANVAS_TOKEN = os.getenv("CANVAS_TOKEN")
     CANVAS_URL = 'https://sdsu.instructure.com/'

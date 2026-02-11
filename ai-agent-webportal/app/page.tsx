@@ -7,18 +7,25 @@ import { useState } from "react";
 
 export default function Home() {
   
-  const [response, setResponse] = useState("");
   const [input, setInput] = useState("");
+  const [response, setResponse] = useState("");
 
   const handleClarify = async () => {
-    const res = await fetch("/api/agent", {
+    //1. add user input to conversation
+    setResponse((prev) => prev + `${input} \n`);
+
+    //2. send input to backend to get response from agent and clear input box
+    const res = await fetch("http://localhost:3001/api/agent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: input }),
     });
+    setInput("");
 
+    //3. append the agent response to the conversation
     const data = await res.json();
-    setInput((prev) => prev + "\n\n" + `Theios: ${data.response}`)
+    console.log(data);
+    setResponse((prev) => prev + "\n" + `THEIOS: ${data.response} \n`)
   };
 
   return (
@@ -38,7 +45,8 @@ export default function Home() {
           </div>
 
           <div className="prompt-container">
-            <textarea placeholder="Have any questions?" value={input} onChange={(e) => setInput(e.target.value)} />
+            <textarea placeholder="Have any questions?" value={response} onChange={(e) => setInput(e.target.value)} />
+            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder='Type questions here...' />
             <button onClick={handleClarify}>Clarify</button>
           </div>
 

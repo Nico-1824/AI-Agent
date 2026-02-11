@@ -62,9 +62,20 @@ button {
 textarea {
   color: black;
   background-color: white;
-  width: 25rem;
+  width: 40rem;
   height: 25rem;  
-  border-radius: 1rem;
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
   padding: 0.5rem;
   font-size: 1.2rem;
+}
+
+input {
+  background-color: white;
+  width: 40rem;
+  height: 2rem;
+  border-bottom-left-radius: 1rem;
+  border-bottom-right-radius: 1rem;
+  border-top: 1px solid black;
+  padding: 0.5rem;
 }
