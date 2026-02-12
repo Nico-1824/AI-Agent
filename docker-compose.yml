@@ -1,0 +1,25 @@
+
+# State the services the docker containers are supporting
+services:
+  # This is the front end orchestration to look for the dockerfile instructions in build path, expose ports, and state that the backend is dependent 
+  # on express
+  frontend:
+    build: ./ai-agent-webportal
+    ports:
+      - "3000:3000"
+    depends_on:
+      - express
+
+  # This says that express api can be found in the build path, exposes neceissary ports, and says it depends on flask api data
+  express:
+    build: ./express-api
+    ports:
+      - "3001:3001"
+    depends_on:
+      - flask
+
+  # This says that the flask api is found at build path and exposes ports
+  flask:
+    build: ./agent
+    ports:
+      - "8000:8000"

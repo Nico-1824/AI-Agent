@@ -11,8 +11,12 @@ export default function Home() {
   const [response, setResponse] = useState("");
 
   const handleClarify = async () => {
-    //1. add user input to conversation
-    setResponse((prev) => prev + `${input} \n`);
+    //1. check if input has text and add user input to conversation
+    if(input) {
+      setResponse((prev) => prev + `${input} \n`);
+    } else {
+      return;
+    }
 
     //2. send input to backend to get response from agent and clear input box
     const res = await fetch("http://localhost:3001/api/agent", {
@@ -25,7 +29,7 @@ export default function Home() {
     //3. append the agent response to the conversation
     const data = await res.json();
     console.log(data);
-    setResponse((prev) => prev + "\n" + `THEIOS: ${data.response} \n`)
+    setResponse((prev) => prev + "\n" + `THEIOS: ${data.response} \n\n`)
   };
 
   return (

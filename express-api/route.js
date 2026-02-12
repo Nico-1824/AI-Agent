@@ -16,7 +16,7 @@ app.post("/api/agent", async (req, res, next) => {
             return res.status(404).send("No input provided");
         }
 
-        const response = await fetch("http://localhost:8000/prompt", {
+        const response = await fetch("http://flask:8000/prompt", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
