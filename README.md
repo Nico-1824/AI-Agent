@@ -1,19 +1,15 @@
-This is THEIOS, a personal AI Agent that has access to my calendar, canvas to see if I have assignemnts for school, and has access to a weather API. Currently these are all the tools he has access to. Theios' name comes from the Greek word for guide or assistant as he is meant to help me organize myself for the week. I purposely don't give Theios access to the internet so that he can't just get information from other sources and must use the tools I provide and interpret the information I know the APIs give him. 
+This is THEO, a personal AI voice assistant that has access to my Google Calendar, Canvas LMS to track school assignments, and a weather API. Theo's name comes from the Greek word for guide or assistant, Theois, as he is meant to help me organize myself and stay on top of my schedule.
 
-The agent uses a GPT 5 nano model to "think" and interpret information. The Python script to prompt the model and run the agentic loop is connected by a Flask server that communicates with an Express server which is connected to the React webpage. The webpage is not meant to be used primarily, the next steps for this would be to implement a texting service that will give me a review of whats up for the week. The webpage is simply to clarify data such as if my recap says I have a test on X day, I might want to ask Theios if its raining that day or if other information conflicts. The webpage would be a link included in the text to ask Theios these sorts of questions. 
+Theo runs entirely locally on device — no internet access, no cloud models. He listens for his name as a wake word and responds to voice commands using speech-to-text and text-to-speech, making him a fully hands-free assistant. I purposely don't give Theo access to the internet so that he must use only the tools I provide and interpret the information I know the APIs return.
 
-For future progress:
-    - Building a texting service and send automated texts weekly
-    - Add short term memory
-    - Add a scolling, stock style, text on the webpage with weekly announcements about whats on the schedule
+The agent uses a local Qwen 2.5 7B model running through Ollama to think and interpret information. Voice input is handled by faster-whisper for transcription and macOS native TTS for responses. The agentic loop is built in raw Python using a ReAct pattern — the model reasons about what tools to call, executes them, observes the results, and chains multiple tool calls together before giving a final response.
+
+The old React/Flask/Express web interface has been replaced entirely in favor of a voice-first experience that runs as a background service on macOS.
+
 
 Tech Stack:
-React
-HTML
-CSS
 Python
-Node.js
-Flask
-Express.js
-Javascript
-Docker
+Ollama
+Whisper
+WakeWord
+Google Calendar

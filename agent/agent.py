@@ -1,78 +1,16 @@
-from openai import OpenAI
 import json
-from dotenv import load_dotenv
-from tools import get_weather, get_calendar, get_canvas_assignments
+from tools import WeatherFunctions, CalenderFunctions, CanvasFunctions, AssitantTools
+from ollama import chat
+from tool_list import tools
+from datetime import *
+import sys
+sys.stdout.reconfigure(line_buffering=True)
 
-load_dotenv()
+weather_functions, calender_functions, canvas_functions, assitant_tools = WeatherFunctions(), CalenderFunctions(), CanvasFunctions(), AssitantTools()
 
-client = OpenAI()
 
-# List of tools for model to use
-tools = [
-    # Tool to get weather information
-    {
-        "type": "function",
-        "name": "get_weather",
-        "description": "Get the current weather conditions such as sky conditions, temperature, and wind speed for a given city.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string",
-                    "description": "The city we want to check the weather for."
-                },
-            },
-            "required": ["city"],
-        },
-    },
 
-    # Tool to get calendar events
-    {
-        "type": "function",
-        "name": "get_calendar",
-        "description": "Get the first 20 events from the user's Google Calendar for the current week and will return the event name, date, and start time, if it has a start time, in a list.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "window": {
-                    "type": "string",
-                    "description": """
-                    The time window for which to retrieve calendar events, formatted as an ISO 8601 timestamp. For example, '2026-01-31T23:59:59Z' to 
-                    get events up to January 31, 2026. If the user does not provide a window, do not pass this parameter. If the user for example wants
-                    events for the week, calculate the end of the week from the current date and provide the timestamp in ISO 8601 format. 
-                    """,
-                }
 
-            },
-            "additionalProperties": False
-        },
-    },
-
-    # Tool to get school assignments from Canvas
-    {
-        "type": "function",
-        "name": "get_canvas_assignments",
-        "description": """
-        Get a list of courses and the assignments that are due within the given time window from the user's Canvas account. The assignments will only
-        be included if they are not yet submitted. The function returns a list of dictionaries, each has the course name and the given assignments
-        due within the window.
-        """,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "window": {
-                    "type": "string",
-                    "description": """
-                    The window parameter a datetime formatted timestamp representing the end of the time window. For example, if today is
-                    January 31, 2026 and the user wants assignemnts due in the next two weeks, the window parameter would be '2026-02-14 23:59:59.441012+00:00'.
-                    If no window is provided, it will be default get assignments due within the next 7 days. If the user does not specify a window, do not pass one.
-                    """
-                },
-            },
-            "additionalProperties": False
-        },
-    },
-]
 
 
 
@@ -82,81 +20,264 @@ tools = [
 
 def prompt_agent(input):
     # input list we will add to and provide to the model
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
     input_list = [
-        {"role": "system", "content": "You are an assistant called Theios. If the user asks for data that a tool can provide, call the corresponding tool using the exact tool name."},
+
+        {"role": "system", 
+         "content": f"""
+         You are an assistant called Theo. If the user asks for data that a tool can provide, call the corresponding tool using the exact tool name. 
+         If you do not have a tool to do a task, do all the tasks you are able to and then at the end say which you can't preform. For context today's
+         date is {today}.
+         """},
         {"role": "user", "content": input},
     ]
 
 
     # Agentic Loop
-    response = client.responses.create(
-        model="gpt-5-nano",
+    # 1. User asks question
+    # 2. Model responds with tool calls
+    # 3. You execute the tools, add results to input_list
+    # 4. Call model AGAIN with updated input_list
+    # 5. Model either calls more tools OR gives final answer
+    # 6. Repeat until no more tool calls
+
+    response = chat(
+        model='qwen2.5:7b',
+        messages=input_list,
         tools=tools,
-        input=input_list,
     )
 
     # Save response for input feedback
-    input_list += response.output
+    input_list.append({"role": "assistant", "content": response.message.content})
 
     # Check the response for tool calls
-    for item in response.output:
-        if item.type == "function_call":
-            if item.name == "get_weather":
+
+    while response.message.tool_calls:
+        print(response.message.tool_calls)
+        for tool_call in response.message.tool_calls:
+
+            if tool_call.function.name == "get_weather":
                 # execute tool to get the weather
                 #print(f"Argument for tool {item.arguments[9:-2]}")
                 print("Getting weather info...")
-                weather_type, temp, wind, name = get_weather(json.loads(item.arguments)["city"])
+                weather_type, temp, wind, name = weather_functions.get_weather(tool_call.function.arguments["city"])
 
                 # add tool response to input list
                 input_list.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
+                    "role": "tool",
+                    "content": json.dumps({
                         "weather_type": weather_type,
                         "temperature": temp,
                         "wind_speed": wind,
                         "city": name,
                     })
                 })
-            elif item.name == "get_calendar":
+            elif tool_call.function.name == "get_calendar":
                 # execute the tool and get the calendar events
                 print("Getting calendar info...")
-                calendar_events = get_calendar(json.loads(item.arguments)["window"])
+                calendar_events = calender_functions.get_calendar(tool_call.function.arguments["window"])
 
                 # add tool response to input list
                 input_list.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
+                    "role": "tool",
+                    "content": json.dumps({
                         "events": calendar_events
                     })
                 })
-            elif item.name == "get_canvas_assignments":
+            elif tool_call.function.name == "add_calendar_event":
+
+                print("Adding to calendar")
+                # def add_calendar_event(title, day, start_time, end_time, decription, calendarType=False)
+                title = tool_call.function.arguments["title"]
+                day = tool_call.function.arguments["day"]
+                start_time = tool_call.function.arguments["start_time"]
+                end_time = tool_call.function.arguments["end_time"]
+                description = tool_call.function.arguments.get("description")
+                calendarType = tool_call.function.arguments.get("calendarType")
+
+                calendar_status = calender_functions.add_calendar_event(title, day, start_time, end_time, description, calendarType)
+
+                input_list.append({
+                    "role": "tool",
+                    "content": json.dumps(calendar_status)
+                })
+
+            elif tool_call.function.name == "find_free_time":
+
+                print("Finding Free Time")
+                free_time = calender_functions.find_free_time(tool_call.function.arguments["day"])
+
+                input_list.append({
+                    "role": "tool",
+                    "content": json.dumps(free_time)
+                })
+
+            elif tool_call.function.name == "get_canvas_assignments":
                 # execute the tool and get the calendar events
                 print("Getting canvas assignments...")
-                canvas_events = get_canvas_assignments(json.loads(item.arguments)["window"])
+                canvas_events = canvas_functions.get_canvas_assignments(tool_call.function.arguments["window"])
 
                 # add tool response to input list
                 input_list.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
-                        "assignments": canvas_events
+                    "role": "tool",
+                    "content": json.dumps({
+                        "assignments": json.dumps(canvas_events)
                     })
                 })
 
+            elif tool_call.function.name == "get_canvas_announcements":
+                print("Getting announcements")
+                end_window = tool_call.function.arguments.get("end_window")
+                canvas_announcements = canvas_functions.get_canvas_announcements(tool_call.function.arguments["start_window"], end_window)
+
+                input_list.append({
+                    "role": "tool",
+                    "content": json.dumps({
+                        "announcements": json.dumps(canvas_announcements)
+                    })
+                })
+
+        # Check again if any tools need to be called again (Tool chaining)
+        print("Calling model again with: ", input_list)
+        response = chat(
+            model='qwen2.5:7b',
+            messages=input_list,
+            tools=tools,
+        )
+
+    input_list.append({"role": "system", "content": "Summarize what you did in one short conversational sentence, as if you are speaking out loud. No quotes, no labels, no markdown."})
     print("Final input to model:", input_list)
 
-    response = client.responses.create(
-        model="gpt-5-nano",
-        instructions="""
-        You are an assistant called Theios and must summarize the information given by the tools and make it short and concise, do not ask if the user needs 
-        anything more, just provide the information. You will return a response that will be displayed in a textbox and must be clean and easy to read.
-        """,
-        tools=tools,
-        input=input_list,
+    response = chat(
+        model='qwen2.5:7b',
+        messages=input_list
     )
 
     # Print model output
-    print(f"\n\n{response.output_text}")
-    return response.output_text
+    print(f"\n\n{response.message.content}")
+    assitant_tools.talk(response_text)
+    return
+
+
+
+
+from pvrecorder import PvRecorder
+from faster_whisper import WhisperModel
+import wave, struct, tempfile, os
+
+whisper = WhisperModel("tiny", device="cpu", compute_type="int8")
+
+
+def listen_for_wake_word(wake_word="theo", chunk_duration=3):
+    """Record in chunks and check for wake word using Whisper."""
+    recorder = PvRecorder(device_index=-1, frame_length=512)
+    recorder.start() #turns on the mic to record
+    print(f"Listening for wake word: '{wake_word}'...")
+
+    while True:
+        # Record a short chunk
+        frames = []
+        for _ in range(0, int(16000 / 512 * chunk_duration)):
+            frames.append(recorder.read())
+
+        # Save chunk to temp file
+        tmp = tempfile.mktemp(suffix=".wav")
+        with wave.open(tmp, "w") as f:
+            f.setnchannels(1)
+            f.setsampwidth(2)
+            f.setframerate(16000)
+            f.writeframes(struct.pack("h" * len(frames) * 512, *[s for frame in frames for s in frame]))
+
+        # Transcribe chunk
+        segments, _ = whisper.transcribe(tmp, beam_size=1)
+        text = " ".join([s.text for s in segments]).strip().lower()
+        os.remove(tmp)
+
+        if wake_word in text:
+            print(f"Wake word detected! Heard: '{text}'")
+            assitant_tools.talk("Yes sir?")
+            recorder.stop()
+            recorder.delete()
+
+            audio_path = record_command()
+            command = transcribe(audio_path)
+            print(f"Command input: {command}")
+            assitant_tools.talk("Checking sir")
+            prompt_agent(command)
+
+            # check for more commands
+            while True:
+                assitant_tools.talk("Anything else Sir?")
+                audio_path = record_command(silence_duration=3)
+                command = transcribe(audio_path)
+                print(f"Command input: {command}")
+                if not command.strip():
+                    print("No more commands")
+                    break
+                assitant_tools.talk("Checking sir")
+                prompt_agent(command)
+            
+            print("Listening for waking word again...")
+            recorder = PvRecorder(device_index=-1, frame_length=512)
+            recorder.start()
+        
+import webrtcvad
+
+def record_command(sample_rate=16000, silence_duration=1.5):
+    """Record until user stops talking."""
+    vad = webrtcvad.Vad(2)  # aggressiveness 0-3, higher = less sensitive
+    recorder = PvRecorder(device_index=-1, frame_length=480)
+    recorder.start()
+
+    print("Speak your command...")
+
+    frames = []
+    silent_frames = 0
+    speaking = False
+
+    # How many silent frames = end of speech
+    max_silent_frames = int(silence_duration * sample_rate / 480)
+
+    while True:
+        pcm = recorder.read()
+        raw = struct.pack("h" * len(pcm), *pcm)
+
+        is_speech = vad.is_speech(raw, sample_rate)
+
+        if is_speech:
+            speaking = True
+            silent_frames = 0
+            frames.append(raw)
+        elif speaking:
+            # Was speaking, now silent
+            silent_frames += 1
+            frames.append(raw)  # keep silence frames so audio isn't cut abruptly
+
+            if silent_frames > max_silent_frames:
+                print("Done listening.")
+                break
+
+    recorder.stop()
+    recorder.delete()
+
+    # Save to temp wav
+    tmp = tempfile.mktemp(suffix=".wav")
+    with wave.open(tmp, "w") as f:
+        f.setnchannels(1)
+        f.setsampwidth(2)
+        f.setframerate(sample_rate)
+        f.writeframes(b"".join(frames))
+
+    return tmp
+
+def transcribe(audio_path):
+    segments, _ = whisper.transcribe(audio_path, beam_size=5)
+    text = " ".join([s.text for s in segments])
+    os.remove(audio_path)  # cleanup temp file
+    return text.strip()
+
+
+if (__name__ == "__main__"):
+    listen_for_wake_word()
